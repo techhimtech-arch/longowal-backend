@@ -326,6 +326,7 @@ class UsersService {
       userType: user.userType,
       organizationId: user.organizationId,
       status: user.status === 'SUSPENDED' ? 'INACTIVE' : user.status,
+      phoneNumber: user.phoneNumber,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
       organization: user.organizationId || null,

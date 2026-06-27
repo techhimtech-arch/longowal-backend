@@ -42,8 +42,8 @@ const config = {
   
   cors: {
     origins: env.FRONTEND_URL 
-      ? [env.FRONTEND_URL, 'https://evergreen-front.vercel.app', 'http://localhost:4200', 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'http://localhost:3001']
-      : ['https://evergreen-front.vercel.app', 'http://localhost:4200', 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'http://localhost:3001']
+      ? [env.FRONTEND_URL, 'https://evergreen-front.vercel.app', 'http://localhost:4200', 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'http://localhost:3001', 'http://localhost:8080']
+      : ['https://evergreen-front.vercel.app', 'http://localhost:4200', 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'http://localhost:3001', 'http://localhost:8080']
   },
   
   logging: {
