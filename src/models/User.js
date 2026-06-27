@@ -5,6 +5,7 @@ const config = require('../config/env');
 
 // Ensure related models are registered
 require('./Role');
+require('./Organization');
 
 const userSchema = new mongoose.Schema({
   uuid: {
@@ -71,6 +72,11 @@ const userSchema = new mongoose.Schema({
   roleId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Role"
+  },
+  
+  organizationId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Organization"
   },
   
   status: {

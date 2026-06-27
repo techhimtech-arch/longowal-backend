@@ -100,8 +100,7 @@ class UsersService {
       .select('-password')
       .sort(sort)
       .skip(skip)
-      .limit(limit)
-      .populate('organizationId', 'name');
+      .limit(limit);
 
     const total = await User.countDocuments(query);
 
@@ -120,7 +119,7 @@ class UsersService {
    * Get user by ID
    */
   async getUserById(userId) {
-    const user = await User.findById(userId).select('-passwordHash').populate('organizationId', 'name');
+    const user = await User.findById(userId).select('-passwordHash');
 
     if (!user) {
       throw new Error('User not found');
@@ -286,8 +285,7 @@ class UsersService {
 
     const users = await User.find(searchQuery)
       .select('-passwordHash')
-      .limit(limit)
-      .populate('organizationId', 'name');
+      .limit(limit);
 
     return users.map(user => this.formatUserResponse(user));
   }
