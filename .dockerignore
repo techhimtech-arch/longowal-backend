@@ -1,10 +1,9 @@
-# Node.js dependencies
-node_modules/
+# Ignore node_modules
+node_modules
 
 # Logs
-logs/
+logs
 *.log
-npm-debug.log*
 
 # Environment variables
 .env
@@ -14,9 +13,9 @@ npm-debug.log*
 Thumbs.db
 
 # IDE-specific files
-.vscode/
-.idea/
+.vscode
+.idea
 
 # Build files
-dist/
-build/
+dist
+build

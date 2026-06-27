@@ -1,0 +1,112 @@
+const mongoose = require('mongoose');
+const { v4: uuidv4 } = require('uuid');
+
+const orderProductSchema = new mongoose.Schema({
+  productName: { type: String, required: true, trim: true },
+  quantity: { type: Number, required: true, min: 0 },
+  unit: { type: String, required: true, trim: true }, // e.g., kg, tons
+  rate: { type: Number, required: true, min: 0 },
+  total: { type: Number, required: true, min: 0 }
+}, { _id: true });
+
+const orderSchema = new mongoose.Schema({
+  uuid: {
+    type: String,
+    required: true,
+    unique: true,
+    default: () => uuidv4()
+  },
+  
+  orderNumber: { type: String, unique: true },
+  enquiryDate: { type: Date, default: Date.now },
+  orderDate: { type: Date, default: Date.now },
+  expectedPaymentDate: { type: Date },
+  
+  // Relations
+  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
+  executionFirmId: { type: mongoose.Schema.Types.ObjectId, ref: 'Firm' },
+  salesExecutiveId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  
+  // Products
+  products: [orderProductSchema],
+  
+  // Delivery Information
+  deliveryAddress: { type: String, trim: true },
+  dispatchLocation: { type: String, trim: true },
+  plantName: { type: String, trim: true },
+  requiredDeliveryDate: { type: Date },
+  estimatedFreight: { type: Number, default: 0 },
+  
+  // Financial Details
+  totalOrderValue: { type: Number, required: true, default: 0 },
+  advanceAmount: { type: Number, default: 0 },
+  balanceAmount: { type: Number, default: 0 },
+  
+  // Logistics Details (Added by Logistics Team)
+  logistics: {
+    transporterName: { type: String, trim: true },
+    vehicleNumber: { type: String, trim: true },
+    driverName: { type: String, trim: true },
+    driverMobile: { type: String, trim: true },
+    freightCost: { type: Number, default: 0 },
+    loadingCharges: { type: Number, default: 0 },
+    otherCharges: { type: Number, default: 0 },
+    lrNumber: { type: String, trim: true },
+    dispatchDate: { type: Date },
+    expectedDeliveryDate: { type: Date }
+  },
+  
+  // Payment tracking summary
+  paymentStatus: {
+    type: String,
+    enum: ['PENDING', 'PARTIAL', 'PAID'],
+    default: 'PENDING'
+  },
+  
+  // Workflow Status
+  status: {
+    type: String,
+    enum: [
+      'DRAFT', 
+      'PENDING_MD_APPROVAL', 
+      'APPROVED', 
+      'REJECTED', 
+      'LOGISTICS_PENDING', 
+      'FREIGHT_APPROVAL_PENDING', 
+      'DISPATCH_READY', 
+      'PACKED', 
+      'SHIPPED', 
+      'DELIVERED', 
+      'INVOICE_GENERATED', 
+      'PAYMENT_PENDING', 
+      'PARTIAL_PAYMENT', 
+      'PAID', 
+      'COMPLETED', 
+      'CANCELLED'
+    ],
+    default: 'DRAFT'
+  },
+  
+  remarks: { type: String, trim: true }
+}, {
+  timestamps: true
+});
+
+orderSchema.index({ orderNumber: 1 });
+orderSchema.index({ customerId: 1 });
+orderSchema.index({ executionFirmId: 1 });
+orderSchema.index({ salesExecutiveId: 1 });
+orderSchema.index({ status: 1 });
+
+// Pre-save to auto-calculate values
+orderSchema.pre('save', function(next) {
+  if (this.products && this.products.length > 0) {
+    this.totalOrderValue = this.products.reduce((acc, p) => acc + (p.total || 0), 0);
+  }
+  this.balanceAmount = this.totalOrderValue - (this.advanceAmount || 0);
+  next();
+});
+
+const Order = mongoose.model('Order', orderSchema);
+
+module.exports = Order;
