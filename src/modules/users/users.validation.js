@@ -1,0 +1,92 @@
+const { body, param, query, validationResult } = require('express-validator');
+
+const handleValidationErrors = (req, res, next) => {
+	const errors = validationResult(req);
+	if (!errors.isEmpty()) {
+		return res.status(400).json({
+			success: false,
+			message: 'Validation failed',
+			errors: errors.array(),
+		});
+	}
+	next();
+};
+
+const createUserValidation = [
+	body('firstName')
+		.notEmpty()
+		.withMessage('First name is required')
+		.isLength({ min: 2, max: 50 })
+		.withMessage('First name must be between 2 and 50 characters'),
+	body('lastName')
+		.notEmpty()
+		.withMessage('Last name is required')
+		.isLength({ min: 2, max: 50 })
+		.withMessage('Last name must be between 2 and 50 characters'),
+	body('email')
+		.notEmpty()
+		.withMessage('Email is required')
+		.isEmail()
+		.withMessage('Valid email is required')
+		.normalizeEmail(),
+	body('password')
+		.notEmpty()
+		.withMessage('Password is required')
+		.isLength({ min: 8 })
+		.withMessage('Password must be at least 8 characters long'),
+	body('role')
+		.notEmpty()
+		.withMessage('Role is required')
+		.isString(),
+	handleValidationErrors,
+];
+
+const updateUserValidation = [
+	param('userId')
+		.optional()
+		.isMongoId()
+		.withMessage('Invalid user ID'),
+	body('firstName')
+		.optional()
+		.isLength({ min: 2, max: 50 })
+		.withMessage('First name must be between 2 and 50 characters'),
+	body('lastName')
+		.optional()
+		.isLength({ min: 2, max: 50 })
+		.withMessage('Last name must be between 2 and 50 characters'),
+	body('email')
+		.optional()
+		.isEmail()
+		.withMessage('Valid email is required')
+		.normalizeEmail(),
+	body('role')
+		.optional()
+		.isString(),
+	body('isActive')
+		.optional()
+		.isBoolean()
+		.withMessage('isActive must be a boolean'),
+	handleValidationErrors,
+];
+
+const getUsersValidation = [
+	query('page').optional().isInt({ min: 1 }).withMessage('Page must be an integer >= 1'),
+	query('limit').optional().isInt({ min: 1 }).withMessage('Limit must be an integer >= 1'),
+	query('role').optional().isString(),
+	query('isActive').optional().isBoolean().withMessage('isActive must be a boolean'),
+	handleValidationErrors,
+];
+
+const userIdValidation = [
+	param('userId')
+		.isMongoId()
+		.withMessage('Invalid user ID'),
+	handleValidationErrors,
+];
+
+module.exports = {
+	createUserValidation,
+	updateUserValidation,
+	getUsersValidation,
+	userIdValidation,
+};
