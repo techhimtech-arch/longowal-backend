@@ -8,7 +8,14 @@ class UsersController {
    * Create a new user
    */
   createUser = asyncHandler(async (req, res) => {
-    const result = await usersService.createUser(req.body, req.user?.userId);
+    const payload = {
+      ...req.body,
+      firstName: req.body.firstName || req.body.name?.split(' ')[0],
+      lastName: req.body.lastName || req.body.name?.split(' ').slice(1).join(' '),
+      userType: req.body.userType || req.body.role,
+    };
+
+    const result = await usersService.createUser(payload, req.user?.userId);
 
     return sendSuccess(res, 201, 'User created successfully', result);
   });

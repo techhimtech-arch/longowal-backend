@@ -14,15 +14,23 @@ const handleValidationErrors = (req, res, next) => {
 
 const createUserValidation = [
 	body('firstName')
-		.notEmpty()
-		.withMessage('First name is required')
+		.optional()
+		.isString()
+		.trim()
 		.isLength({ min: 2, max: 50 })
 		.withMessage('First name must be between 2 and 50 characters'),
 	body('lastName')
-		.notEmpty()
-		.withMessage('Last name is required')
+		.optional()
+		.isString()
+		.trim()
 		.isLength({ min: 2, max: 50 })
 		.withMessage('Last name must be between 2 and 50 characters'),
+	body('name')
+		.optional()
+		.isString()
+		.trim()
+		.isLength({ min: 2, max: 100 })
+		.withMessage('Name must be between 2 and 100 characters'),
 	body('email')
 		.notEmpty()
 		.withMessage('Email is required')
@@ -34,10 +42,24 @@ const createUserValidation = [
 		.withMessage('Password is required')
 		.isLength({ min: 8 })
 		.withMessage('Password must be at least 8 characters long'),
-	body('role')
-		.notEmpty()
-		.withMessage('Role is required')
-		.isString(),
+	body('role').optional().isString(),
+	body('userType').optional().isString(),
+	body().custom((value) => {
+		const hasName = typeof value?.name === 'string' && value.name.trim().length > 0;
+		const hasFirstLast = typeof value?.firstName === 'string' && value.firstName.trim().length > 0 && typeof value?.lastName === 'string' && value.lastName.trim().length > 0;
+		const hasRole = typeof value?.role === 'string' && value.role.trim().length > 0;
+		const hasUserType = typeof value?.userType === 'string' && value.userType.trim().length > 0;
+
+		if (!hasName && !hasFirstLast) {
+			throw new Error('Either name or firstName/lastName is required');
+		}
+
+		if (!hasRole && !hasUserType) {
+			throw new Error('Role is required');
+		}
+
+		return true;
+	}),
 	handleValidationErrors,
 ];
 
