@@ -63,7 +63,7 @@ const userSchema = new mongoose.Schema({
   userType: {
     type: String,
     enum: {
-      values: ["SUPER_ADMIN", "ORG_ADMIN", "OFFICER", "VOLUNTEER", "CITIZEN"],
+      values: ["SUPER_ADMIN", "ORG_ADMIN", "OFFICER", "VOLUNTEER", "CITIZEN", "LOGISTICS_TEAM"],
       message: '{VALUE} is not a valid user type'
     },
     default: "CITIZEN"

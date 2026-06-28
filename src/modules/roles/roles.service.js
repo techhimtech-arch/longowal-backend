@@ -300,6 +300,14 @@ class RolesService {
         ],
       },
       {
+        name: 'logistics',
+        description: 'Logistics team role for shipment and dispatch management',
+        permissions: [
+          'users:read',
+          'reports:read',
+        ],
+      },
+      {
         name: 'teacher',
         description: 'Teacher with classroom and student management access',
         permissions: [

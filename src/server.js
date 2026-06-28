@@ -5,6 +5,7 @@ logger.info('Server startup initiated');
 const { app, connectRedis } = require('./app');
 const config = require('./config/env');
 const connectDB = require('./config/database');
+const rolesService = require('./modules/roles/roles.service');
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
@@ -23,6 +24,10 @@ async function startServer() {
     logger.info('Connecting to MongoDB...');
     await connectDB();
     logger.info('MongoDB connected successfully');
+
+    logger.info('Ensuring default roles exist...');
+    await rolesService.initializeDefaultRoles();
+    logger.info('Default roles ensured');
 
     logger.info('Connecting to Redis...');
     await connectRedis();
