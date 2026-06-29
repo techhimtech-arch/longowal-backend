@@ -4,9 +4,10 @@ const {
   getOrders,
   getOrder,
   updateOrderStatus,
-  updateOrderLogistics
+  updateOrderLogistics,
+  updateOrder
 } = require('./orders.controller');
-const { authenticate } = require('../../middleware/auth.middleware');
+const { authenticate, authorizeRoles } = require('../../middleware/auth.middleware');
 
 const router = express.Router();
 
@@ -58,7 +59,8 @@ router
  */
 router
   .route('/:id')
-  .get(getOrder);
+  .get(getOrder)
+  .put(authorizeRoles('SUPER_ADMIN', 'superadmin', 'ADMIN', 'admin'), updateOrder);
 
 /**
  * @swagger

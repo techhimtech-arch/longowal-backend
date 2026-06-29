@@ -9,6 +9,14 @@ const orderProductSchema = new mongoose.Schema({
   total: { type: Number, required: true, min: 0 }
 }, { _id: true });
 
+const orderStatusHistorySchema = new mongoose.Schema({
+  status: { type: String, required: true },
+  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  updatedByName: { type: String },
+  remarks: { type: String },
+  updatedAt: { type: Date, default: Date.now }
+}, { _id: false });
+
 const orderSchema = new mongoose.Schema({
   uuid: {
     type: String,
@@ -87,7 +95,8 @@ const orderSchema = new mongoose.Schema({
     default: 'DRAFT'
   },
   
-  remarks: { type: String, trim: true }
+  remarks: { type: String, trim: true },
+  statusHistory: [orderStatusHistorySchema]
 }, {
   timestamps: true
 });

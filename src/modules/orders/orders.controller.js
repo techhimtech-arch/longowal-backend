@@ -13,8 +13,17 @@ const createOrder = asyncHandler(async (req, res) => {
   }
   
   if (!orderData.salesExecutiveId) {
-    orderData.salesExecutiveId = req.user.id;
+    orderData.salesExecutiveId = req.user.id || req.user._id;
   }
+  
+  // Set initial status history
+  orderData.statusHistory = [{
+    status: orderData.status || 'DRAFT',
+    updatedBy: req.user._id || req.user.userId || req.user.id,
+    updatedByName: req.user.firstName ? `${req.user.firstName} ${req.user.lastName}` : (req.user.name || req.user.email || 'System'),
+    remarks: 'Order created',
+    updatedAt: new Date()
+  }];
   
   // Create order
   const order = await Order.create(orderData);
@@ -93,6 +102,19 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   order.status = status;
   if (remarks) order.remarks = remarks;
   
+  // Push status transition to history
+  if (!order.statusHistory) {
+    order.statusHistory = [];
+  }
+  
+  order.statusHistory.push({
+    status,
+    updatedBy: req.user._id || req.user.userId || req.user.id,
+    updatedByName: req.user.firstName ? `${req.user.firstName} ${req.user.lastName}` : (req.user.name || req.user.email || 'User'),
+    remarks: remarks || `Status updated to ${status}`,
+    updatedAt: new Date()
+  });
+  
   await order.save();
 
   res.status(200).json({
@@ -125,10 +147,50 @@ const updateOrderLogistics = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Update order details
+// @route   PUT /api/v1/orders/:id
+// @access  Private (Admin)
+const updateOrder = asyncHandler(async (req, res) => {
+  let order = await Order.findById(req.params.id);
+  
+  if (!order) {
+    res.status(404);
+    throw new Error('Order not found');
+  }
+
+  // Update order fields
+  const allowedUpdates = [
+    'customerId', 'executionFirmId', 'salesExecutiveId', 'orderDate', 
+    'expectedPaymentDate', 'products', 'deliveryAddress', 'dispatchLocation', 
+    'plantName', 'requiredDeliveryDate', 'estimatedFreight', 'advanceAmount',
+    'status', 'remarks'
+  ];
+
+  allowedUpdates.forEach(field => {
+    if (req.body[field] !== undefined) {
+      order[field] = req.body[field];
+    }
+  });
+
+  await order.save();
+
+  // Populate references before sending back
+  order = await Order.findById(order._id)
+    .populate('customerId')
+    .populate('executionFirmId')
+    .populate('salesExecutiveId', 'firstName lastName email');
+
+  res.status(200).json({
+    success: true,
+    data: order
+  });
+});
+
 module.exports = {
   createOrder,
   getOrders,
   getOrder,
   updateOrderStatus,
-  updateOrderLogistics
+  updateOrderLogistics,
+  updateOrder
 };
