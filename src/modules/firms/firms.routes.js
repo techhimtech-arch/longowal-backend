@@ -5,7 +5,7 @@ const {
   getFirm,
   updateFirm
 } = require('./firms.controller');
-const { authenticate } = require('../../middleware/auth.middleware');
+const { authenticate, authorizeRoles } = require('../../middleware/auth.middleware');
 
 const router = express.Router();
 
@@ -37,7 +37,7 @@ router.use(authenticate);
 router
   .route('/')
   .get(getFirms)
-  .post(createFirm);
+  .post(authorizeRoles('SUPER_ADMIN', 'superadmin', 'ADMIN', 'admin'), createFirm);
 
 /**
  * @swagger
@@ -70,6 +70,6 @@ router
 router
   .route('/:id')
   .get(getFirm)
-  .put(updateFirm);
+  .put(authorizeRoles('SUPER_ADMIN', 'superadmin', 'ADMIN', 'admin'), updateFirm);
 
 module.exports = router;
