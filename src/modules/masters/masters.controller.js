@@ -45,7 +45,9 @@ const getMasterEntries = asyncHandler(async (req, res) => {
   }
   
   if (req.query.isActive !== undefined) {
-    filter.isActive = req.query.isActive === 'true';
+    if (req.query.isActive !== 'all') {
+      filter.isActive = req.query.isActive === 'true';
+    }
   } else {
     // By default, only return active master entries
     filter.isActive = true;
