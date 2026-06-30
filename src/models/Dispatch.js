@@ -32,6 +32,12 @@ const dispatchSchema = new mongoose.Schema({
     quantity: { type: Number, required: true }
   }],
   
+  // Transporter Payment tracking
+  transporterPaymentStatus: { type: String, enum: ['PENDING', 'PAID'], default: 'PENDING' },
+  transporterPaymentProofUrl: { type: String, trim: true },
+  transporterPaymentDate: { type: Date },
+  transporterPaymentRemarks: { type: String, trim: true },
+  
   // Dates
   dispatchDate: { type: Date, required: true, default: Date.now },
   expectedDeliveryDate: { type: Date },

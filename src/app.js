@@ -41,6 +41,10 @@ try {
   
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
+  
+  // Serve uploaded files statically
+  const path = require('path');
+  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
   // Rate limiting
   const limiter = rateLimit({

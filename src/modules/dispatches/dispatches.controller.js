@@ -165,9 +165,36 @@ const updateDispatchStatus = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Record transporter payment details
+// @route   PUT /api/v1/dispatches/:id/payment
+// @access  Private (Accounts / Admin / MD)
+const updateDispatchPayment = asyncHandler(async (req, res) => {
+  const { transporterPaymentRemarks, transporterPaymentProofUrl } = req.body;
+  
+  let dispatch = await Dispatch.findById(req.params.id);
+  
+  if (!dispatch) {
+    res.status(404);
+    throw new Error('Dispatch not found');
+  }
+  
+  dispatch.transporterPaymentStatus = 'PAID';
+  dispatch.transporterPaymentDate = new Date();
+  if (transporterPaymentRemarks) dispatch.transporterPaymentRemarks = transporterPaymentRemarks;
+  if (transporterPaymentProofUrl) dispatch.transporterPaymentProofUrl = transporterPaymentProofUrl;
+  
+  await dispatch.save();
+  
+  res.status(200).json({
+    success: true,
+    data: dispatch
+  });
+});
+
 module.exports = {
   createDispatch,
   getDispatches,
   getDispatch,
-  updateDispatchStatus
+  updateDispatchStatus,
+  updateDispatchPayment
 };

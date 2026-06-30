@@ -102,7 +102,14 @@ const orderSchema = new mongoose.Schema({
   },
   
   remarks: { type: String, trim: true },
-  statusHistory: [orderStatusHistorySchema]
+  statusHistory: [orderStatusHistorySchema],
+  materialAdjustment: {
+    adjustedToOrderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order' },
+    adjustmentType: { type: String, enum: ['DIVERTED_TO_OTHER_ORDER', 'RETURNED_TO_STOCK', 'OTHER'], default: 'RETURNED_TO_STOCK' },
+    adjustmentRemarks: { type: String, trim: true },
+    adjustedAt: { type: Date },
+    adjustedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  }
 }, {
   timestamps: true
 });

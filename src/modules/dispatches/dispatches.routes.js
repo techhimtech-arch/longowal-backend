@@ -1,9 +1,9 @@
-const express = require('express');
 const {
   createDispatch,
   getDispatches,
   getDispatch,
-  updateDispatchStatus
+  updateDispatchStatus,
+  updateDispatchPayment
 } = require('./dispatches.controller');
 const { authenticate } = require('../../middleware/auth.middleware');
 
@@ -76,5 +76,6 @@ router
  *         description: Updated dispatch
  */
 router.put('/:id/status', updateDispatchStatus);
+router.put('/:id/payment', updateDispatchPayment);
 
 module.exports = router;
