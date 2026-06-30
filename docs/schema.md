@@ -33,6 +33,14 @@ Stores profile and access credentials.
 - `userType` (String): Normalized enum for fallback checks.
 - `status` (String, Default: `'ACTIVE'`): `ACTIVE`, `INACTIVE`.
 
+### 1.3. Master Data Collection (`masterdatas`)
+Stores unified dropdown metadata records (States, Loading Plants, Products).
+- `category` (String, Required): Enum values: `'STATE'`, `'PLANT'`, `'PRODUCT'`, `'OTHER'`.
+- `key` (String, Required): Code or unique identifier for the entry (e.g. state code, product code).
+- `value` (Mixed, Required): Dynamic properties object (e.g. name, defaults, addresses).
+- `isActive` (Boolean, Default: `true`): Lookup active flag.
+- `remarks` (String): Custom remarks.
+
 ---
 
 ## 2. Leads & Customers
