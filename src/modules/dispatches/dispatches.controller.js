@@ -26,7 +26,13 @@ const createDispatch = asyncHandler(async (req, res) => {
   const dispatch = await Dispatch.create(dispatchData);
   
   // Update order status
-  order.status = 'DISPATCH_READY';
+  if (dispatch.status === 'FREIGHT_APPROVAL_PENDING') {
+    order.status = 'FREIGHT_APPROVAL_PENDING';
+  } else if (dispatch.status === 'DISPATCHED' || dispatch.status === 'IN_TRANSIT') {
+    order.status = 'SHIPPED';
+  } else {
+    order.status = 'LOGISTICS_PENDING';
+  }
   await order.save();
   
   res.status(201).json({
@@ -43,6 +49,7 @@ const getDispatches = asyncHandler(async (req, res) => {
   
   if (req.query.status) query.status = req.query.status;
   if (req.query.firmId) query.firmId = req.query.firmId;
+  if (req.query.orderId) query.orderId = req.query.orderId;
   
   const dispatches = await Dispatch.find(query)
     .populate('orderId', 'orderNumber')
@@ -90,10 +97,19 @@ const updateDispatchStatus = asyncHandler(async (req, res) => {
     throw new Error('Dispatch not found');
   }
   
-  dispatch.status = status;
+  if (status === 'APPROVED_FREIGHT') {
+    dispatch.status = 'PLANNED';
+    dispatch.isFreightApproved = true;
+  } else if (status === 'REJECTED_FREIGHT') {
+    dispatch.status = 'PLANNED';
+    dispatch.isFreightApproved = false;
+  } else {
+    dispatch.status = status;
+  }
+  
   if (remarks) dispatch.remarks = remarks;
   
-  if (status === 'DELIVERED') {
+  if (dispatch.status === 'DELIVERED') {
     dispatch.actualDeliveryDate = Date.now();
   }
   
@@ -102,10 +118,43 @@ const updateDispatchStatus = asyncHandler(async (req, res) => {
   // Sync with order status
   const order = await Order.findById(dispatch.orderId);
   if (order) {
-    if (status === 'DISPATCHED' || status === 'IN_TRANSIT') {
+    if (status === 'APPROVED_FREIGHT' || status === 'REJECTED_FREIGHT') {
+      // Check if there are other dispatches that are pending freight approval
+      const pendingDispatches = await Dispatch.find({
+        orderId: order._id,
+        status: 'FREIGHT_APPROVAL_PENDING',
+        _id: { $ne: dispatch._id }
+      });
+      
+      if (pendingDispatches.length === 0) {
+        order.status = 'LOGISTICS_PENDING';
+      }
+      
+      // Push status transition to history
+      if (!order.statusHistory) order.statusHistory = [];
+      order.statusHistory.push({
+        status: 'LOGISTICS_PENDING',
+        updatedBy: req.user?._id || req.user?.userId || req.user?.id,
+        updatedByName: req.user?.firstName ? `${req.user.firstName} ${req.user.lastName}` : (req.user?.name || req.user?.email || 'User'),
+        remarks: remarks || `Freight cost for vehicle ${dispatch.vehicleNumber} ${status === 'APPROVED_FREIGHT' ? 'approved' : 'rejected'} by MD.`,
+        updatedAt: new Date()
+      });
+    } else if (dispatch.status === 'FREIGHT_APPROVAL_PENDING') {
+      order.status = 'FREIGHT_APPROVAL_PENDING';
+    } else if (dispatch.status === 'DISPATCHED' || dispatch.status === 'IN_TRANSIT') {
       order.status = 'SHIPPED';
-    } else if (status === 'DELIVERED') {
-      order.status = 'DELIVERED';
+    } else if (dispatch.status === 'DELIVERED') {
+      // Only mark order DELIVERED if all dispatches of this order are DELIVERED
+      const otherDispatches = await Dispatch.find({
+        orderId: order._id,
+        _id: { $ne: dispatch._id }
+      });
+      const allDelivered = otherDispatches.every(d => d.status === 'DELIVERED');
+      if (allDelivered) {
+        order.status = 'DELIVERED';
+      } else {
+        order.status = 'SHIPPED';
+      }
     }
     await order.save();
   }

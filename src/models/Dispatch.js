@@ -23,6 +23,15 @@ const dispatchSchema = new mongoose.Schema({
   driverMobile: { type: String, required: true, trim: true },
   lrNumber: { type: String, trim: true },
   
+  // Multi-Vehicle Logistics Details
+  freightCost: { type: Number, default: 0 },
+  loadingCharges: { type: Number, default: 0 },
+  isFreightApproved: { type: Boolean, default: false },
+  products: [{
+    productName: { type: String, required: true },
+    quantity: { type: Number, required: true }
+  }],
+  
   // Dates
   dispatchDate: { type: Date, required: true, default: Date.now },
   expectedDeliveryDate: { type: Date },
@@ -35,7 +44,7 @@ const dispatchSchema = new mongoose.Schema({
   
   status: {
     type: String,
-    enum: ['PLANNED', 'DISPATCHED', 'IN_TRANSIT', 'DELIVERED'],
+    enum: ['PLANNED', 'FREIGHT_APPROVAL_PENDING', 'DISPATCHED', 'IN_TRANSIT', 'DELIVERED'],
     default: 'PLANNED'
   },
   
