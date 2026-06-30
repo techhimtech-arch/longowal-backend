@@ -79,7 +79,10 @@ const authorizeRoles = (...allowedRoles) => {
       return sendUnauthorized(res, 'Authentication required');
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    const normalizedUserRole = (req.user.role || '').toLowerCase().replace(/[\s_-]/g, '');
+    const normalizedAllowedRoles = allowedRoles.map(r => r.toLowerCase().replace(/[\s_-]/g, ''));
+
+    if (!normalizedAllowedRoles.includes(normalizedUserRole)) {
       logger.warn('Unauthorized access attempt', {
         userId: req.user.userId,
         userRole: req.user.role,
