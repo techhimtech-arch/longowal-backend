@@ -130,11 +130,12 @@ orderSchema.pre('save', function(next) {
         const margin = p.margin || 0;
         const gstPercent = p.gstPercent || 0;
         
-        const baseRate = supplyRate + freight + margin;
-        p.gstAmount = Number((baseRate * (gstPercent / 100)).toFixed(2));
-        p.rate = Number((baseRate + p.gstAmount).toFixed(2));
+        const supplyValue = p.quantity * supplyRate;
+        const baseCostForGst = supplyValue + freight;
+        p.gstAmount = Number((baseCostForGst * (gstPercent / 100)).toFixed(2));
+        p.total = Number((baseCostForGst + p.gstAmount + margin).toFixed(2));
+        p.rate = p.quantity > 0 ? Number((p.total / p.quantity).toFixed(2)) : 0;
       }
-      p.total = Number((p.quantity * p.rate).toFixed(2));
     });
     this.totalOrderValue = this.products.reduce((acc, p) => acc + (p.total || 0), 0);
   }
