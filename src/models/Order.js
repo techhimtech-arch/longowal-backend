@@ -66,7 +66,8 @@ const orderSchema = new mongoose.Schema({
     otherCharges: { type: Number, default: 0 },
     lrNumber: { type: String, trim: true },
     dispatchDate: { type: Date },
-    expectedDeliveryDate: { type: Date }
+    expectedDeliveryDate: { type: Date },
+    isFreightApproved: { type: Boolean, default: false }
   },
   
   // Payment tracking summary

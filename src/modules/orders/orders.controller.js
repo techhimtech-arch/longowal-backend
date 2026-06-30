@@ -99,21 +99,51 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     throw new Error('Order not found');
   }
   
-  order.status = status;
-  if (remarks) order.remarks = remarks;
-  
   // Push status transition to history
   if (!order.statusHistory) {
     order.statusHistory = [];
   }
   
-  order.statusHistory.push({
-    status,
-    updatedBy: req.user._id || req.user.userId || req.user.id,
-    updatedByName: req.user.firstName ? `${req.user.firstName} ${req.user.lastName}` : (req.user.name || req.user.email || 'User'),
-    remarks: remarks || `Status updated to ${status}`,
-    updatedAt: new Date()
-  });
+  if (status === 'APPROVED_FREIGHT') {
+    order.status = 'LOGISTICS_PENDING';
+    if (!order.logistics) {
+      order.logistics = {};
+    }
+    order.logistics.isFreightApproved = true;
+    
+    order.statusHistory.push({
+      status: 'LOGISTICS_PENDING',
+      updatedBy: req.user._id || req.user.userId || req.user.id,
+      updatedByName: req.user.firstName ? `${req.user.firstName} ${req.user.lastName}` : (req.user.name || req.user.email || 'User'),
+      remarks: remarks || `Freight cost of ₹${order.logistics?.freightCost || 0} approved by MD.`,
+      updatedAt: new Date()
+    });
+  } else if (status === 'REJECTED_FREIGHT') {
+    order.status = 'LOGISTICS_PENDING';
+    if (!order.logistics) {
+      order.logistics = {};
+    }
+    order.logistics.isFreightApproved = false;
+    
+    order.statusHistory.push({
+      status: 'LOGISTICS_PENDING',
+      updatedBy: req.user._id || req.user.userId || req.user.id,
+      updatedByName: req.user.firstName ? `${req.user.firstName} ${req.user.lastName}` : (req.user.name || req.user.email || 'User'),
+      remarks: remarks || `Freight cost of ₹${order.logistics?.freightCost || 0} rejected by MD.`,
+      updatedAt: new Date()
+    });
+  } else {
+    order.status = status;
+    if (remarks) order.remarks = remarks;
+    
+    order.statusHistory.push({
+      status,
+      updatedBy: req.user._id || req.user.userId || req.user.id,
+      updatedByName: req.user.firstName ? `${req.user.firstName} ${req.user.lastName}` : (req.user.name || req.user.email || 'User'),
+      remarks: remarks || `Status updated to ${status}`,
+      updatedAt: new Date()
+    });
+  }
   
   await order.save();
 
