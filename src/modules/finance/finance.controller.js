@@ -3,11 +3,25 @@ const Invoice = require('../../models/Invoice');
 const Payment = require('../../models/Payment');
 const Order = require('../../models/Order');
 const Customer = require('../../models/Customer');
+const { createNotification, notifyRole } = require('../../utils/notification');
 
 // @desc    Create a new invoice
 // @route   POST /api/v1/finance/invoices
 // @access  Private (Accounts/Admin)
 const createInvoice = asyncHandler(async (req, res) => {
+  if (req.user) {
+    const role = (req.user.role || '').toLowerCase().replace(/[\s_-]/g, '');
+    const userType = req.user.userType;
+    const isAccounts = userType === 'CITIZEN' || role === 'accounts' || role === 'accountant';
+    const isSuperAdmin = userType === 'SUPER_ADMIN' || role === 'superadmin' || role === 'admin';
+    const isMD = userType === 'MD' || role === 'md' || role === 'cmd' || role === 'managingdirector';
+    
+    if (!isAccounts && !isSuperAdmin && !isMD) {
+      res.status(403);
+      throw new Error('Insufficient permissions: Only Accounts team, MD, or Admin are authorized to perform this operation');
+    }
+  }
+
   const invoiceData = req.body;
   
   if (!invoiceData.invoiceNumber) {
@@ -74,6 +88,19 @@ const getInvoices = asyncHandler(async (req, res) => {
 // @route   POST /api/v1/finance/payments
 // @access  Private (Accounts/Admin)
 const recordPayment = asyncHandler(async (req, res) => {
+  if (req.user) {
+    const role = (req.user.role || '').toLowerCase().replace(/[\s_-]/g, '');
+    const userType = req.user.userType;
+    const isAccounts = userType === 'CITIZEN' || role === 'accounts' || role === 'accountant';
+    const isSuperAdmin = userType === 'SUPER_ADMIN' || role === 'superadmin' || role === 'admin';
+    const isMD = userType === 'MD' || role === 'md' || role === 'cmd' || role === 'managingdirector';
+    
+    if (!isAccounts && !isSuperAdmin && !isMD) {
+      res.status(403);
+      throw new Error('Insufficient permissions: Only Accounts team, MD, or Admin are authorized to perform this operation');
+    }
+  }
+
   const paymentData = req.body;
   
   const invoice = await Invoice.findById(paymentData.invoiceId);
@@ -100,6 +127,33 @@ const recordPayment = asyncHandler(async (req, res) => {
       order.status = 'PARTIAL_PAYMENT';
     }
     await order.save();
+
+    if (order.status === 'COMPLETED') {
+      await createNotification({
+        userId: order.salesExecutiveId,
+        title: 'Payment Completed',
+        message: `Payment for order ${order.orderNumber} has been completed and closed.`,
+        type: 'PAYMENT_COMPLETED',
+        orderId: order._id
+      });
+      if (order.assignedLogisticsId) {
+        await createNotification({
+          userId: order.assignedLogisticsId,
+          title: 'Payment Completed',
+          message: `Payment for order ${order.orderNumber} has been completed.`,
+          type: 'PAYMENT_COMPLETED',
+          orderId: order._id
+        });
+      }
+      await notifyRole({
+        roleName: 'md',
+        userType: 'MD',
+        title: 'Order Payment Completed',
+        message: `Payment for order ${order.orderNumber} is completed.`,
+        type: 'PAYMENT_COMPLETED',
+        orderId: order._id
+      });
+    }
   }
   
   res.status(201).json({

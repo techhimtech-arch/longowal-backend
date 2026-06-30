@@ -16,6 +16,7 @@ router.use('/dispatches', require('../../modules/dispatches/dispatches.routes'))
 router.use('/finance', require('../../modules/finance/finance.routes'));
 router.use('/upload', require('../../modules/upload/upload.routes'));
 router.use('/masters', require('../../modules/masters/masters.routes'));
+router.use('/notifications', require('../../modules/notifications/notifications.routes'));
 
 // Health check endpoint
 router.get('/health', (req, res) => {

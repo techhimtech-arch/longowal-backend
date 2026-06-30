@@ -1,10 +1,54 @@
 const asyncHandler = require('express-async-handler');
 const Order = require('../../models/Order');
+const { createNotification, notifyRole } = require('../../utils/notification');
+
+// Helper to check if user has access to a specific order
+const hasOrderAccess = (order, user) => {
+  const role = (user.role || '').toLowerCase().replace(/[\s_-]/g, '');
+  const userType = user.userType;
+  
+  const isSuperAdmin = userType === 'SUPER_ADMIN' || role === 'superadmin' || role === 'admin';
+  const isMD = userType === 'MD' || role === 'md' || role === 'cmd' || role === 'managingdirector';
+  
+  if (isSuperAdmin || isMD) return true;
+  
+  const isSales = userType === 'SALES_EXECUTIVE' || role === 'salesexecutive' || role === 'sales' || role === 'orgadmin';
+  if (isSales && order.salesExecutiveId) {
+    return order.salesExecutiveId.toString() === (user.userId || user.id || user._id).toString();
+  }
+  
+  const isLogistics = userType === 'LOGISTICS_TEAM' || role === 'logistics' || role === 'logisticsteam';
+  if (isLogistics && order.assignedLogisticsId) {
+    return order.assignedLogisticsId.toString() === (user.userId || user.id || user._id).toString();
+  }
+  
+  const isAccounts = userType === 'CITIZEN' || role === 'accounts' || role === 'accountant';
+  if (isAccounts) {
+    const accountsStatuses = ['SENT_TO_ACCOUNTS', 'INVOICE_GENERATED', 'PAYMENT_PENDING', 'PARTIAL_PAYMENT', 'PAID', 'COMPLETED'];
+    return accountsStatuses.includes(order.status);
+  }
+  
+  return false;
+};
 
 // @desc    Create a new order
 // @route   POST /api/v1/orders
 // @access  Private (Sales)
 const createOrder = asyncHandler(async (req, res) => {
+  // Validate role
+  if (req.user) {
+    const role = (req.user.role || '').toLowerCase().replace(/[\s_-]/g, '');
+    const userType = req.user.userType;
+    
+    const isLogistics = userType === 'LOGISTICS_TEAM' || role === 'logistics' || role === 'logisticsteam';
+    const isAccounts = userType === 'CITIZEN' || role === 'accounts' || role === 'accountant';
+    
+    if (isLogistics || isAccounts) {
+      res.status(403);
+      throw new Error('Insufficient permissions: Logistics and Accounts users are not allowed to create orders');
+    }
+  }
+
   const orderData = req.body;
   
   // Assign a unique order number
@@ -13,7 +57,7 @@ const createOrder = asyncHandler(async (req, res) => {
   }
   
   if (!orderData.salesExecutiveId) {
-    orderData.salesExecutiveId = req.user.id || req.user._id;
+    orderData.salesExecutiveId = req.user.userId || req.user._id || req.user.id;
   }
   
   // Set initial status history
@@ -24,9 +68,24 @@ const createOrder = asyncHandler(async (req, res) => {
     remarks: 'Order created',
     updatedAt: new Date()
   }];
+
+  // Initial assignment makes it unread for other relevant users
+  orderData.viewedBy = [req.user.userId || req.user.id];
   
   // Create order
   const order = await Order.create(orderData);
+
+  // Trigger MD notification if submitted for approval
+  if (order.status === 'PENDING_MD_APPROVAL') {
+    await notifyRole({
+      roleName: 'md',
+      userType: 'MD',
+      title: 'New Order Awaiting Approval',
+      message: `Order ${order.orderNumber} has been submitted for MD approval.`,
+      type: 'NEW_ORDER',
+      orderId: order._id
+    });
+  }
   
   res.status(201).json({
     success: true,
@@ -41,11 +100,26 @@ const getOrders = asyncHandler(async (req, res) => {
   let query = {};
   
   // Filter based on roles
-  if (req.user && req.user.userType === 'SALES_EXECUTIVE') {
-    query.salesExecutiveId = req.user.id;
-  } else if (req.user && req.user.userType === 'LOGISTICS_TEAM') {
-    // Logistics team should only see orders that are approved or beyond
-    query.status = { $in: ['APPROVED', 'LOGISTICS_PENDING', 'FREIGHT_APPROVAL_PENDING', 'DISPATCH_READY', 'PACKED', 'SHIPPED', 'DELIVERED'] };
+  if (req.user) {
+    const role = (req.user.role || '').toLowerCase().replace(/[\s_-]/g, '');
+    const userType = req.user.userType;
+    
+    const isSales = userType === 'SALES_EXECUTIVE' || role === 'salesexecutive' || role === 'sales' || role === 'orgadmin';
+    const isLogistics = userType === 'LOGISTICS_TEAM' || role === 'logistics' || role === 'logisticsteam';
+    const isAccounts = userType === 'CITIZEN' || role === 'accounts' || role === 'accountant';
+    const isMD = userType === 'MD' || role === 'md' || role === 'cmd' || role === 'managingdirector';
+    const isSuperAdmin = userType === 'SUPER_ADMIN' || role === 'superadmin' || role === 'admin';
+    
+    if (isSales) {
+      query.salesExecutiveId = req.user.userId || req.user.id || req.user._id;
+    } else if (isLogistics) {
+      // Logistics team should only see orders that are approved or beyond and are explicitly assigned to them!
+      query.assignedLogisticsId = req.user.userId || req.user.id || req.user._id;
+      query.status = { $in: ['APPROVED', 'LOGISTICS_PENDING', 'FREIGHT_APPROVAL_PENDING', 'DISPATCH_READY', 'PACKED', 'SHIPPED', 'DELIVERED', 'SENT_TO_ACCOUNTS', 'INVOICE_GENERATED', 'PAYMENT_PENDING', 'PARTIAL_PAYMENT', 'PAID', 'COMPLETED'] };
+    } else if (isAccounts) {
+      // Accounts team should only see orders that have been sent to accounts
+      query.status = { $in: ['SENT_TO_ACCOUNTS', 'INVOICE_GENERATED', 'PAYMENT_PENDING', 'PARTIAL_PAYMENT', 'PAID', 'COMPLETED'] };
+    }
   }
   
   // Additional filters from query params
@@ -57,6 +131,7 @@ const getOrders = asyncHandler(async (req, res) => {
     .populate('customerId', 'companyName customerCode')
     .populate('executionFirmId', 'firmName')
     .populate('salesExecutiveId', 'firstName lastName')
+    .populate('assignedLogisticsId', 'firstName lastName')
     .sort('-createdAt');
     
   res.status(200).json({
@@ -73,11 +148,27 @@ const getOrder = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id)
     .populate('customerId')
     .populate('executionFirmId')
-    .populate('salesExecutiveId', 'firstName lastName email');
+    .populate('salesExecutiveId', 'firstName lastName email')
+    .populate('assignedLogisticsId', 'firstName lastName email');
     
   if (!order) {
     res.status(404);
     throw new Error('Order not found');
+  }
+
+  // Access validation
+  if (req.user && !hasOrderAccess(order, req.user)) {
+    res.status(403);
+    throw new Error('Insufficient permissions: You are not authorized to view this order.');
+  }
+
+  // Append user to viewedBy list if not present, and save
+  if (req.user) {
+    const currentUserId = req.user.userId || req.user.id || req.user._id;
+    if (currentUserId && order.viewedBy && !order.viewedBy.some(id => id.toString() === currentUserId.toString())) {
+      await Order.updateOne({ _id: order._id }, { $push: { viewedBy: currentUserId } });
+      order.viewedBy.push(currentUserId);
+    }
   }
 
   res.status(200).json({
@@ -98,10 +189,22 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error('Order not found');
   }
+
+  // Access validation
+  if (req.user && !hasOrderAccess(order, req.user)) {
+    res.status(403);
+    throw new Error('Insufficient permissions: You are not authorized to update status for this order.');
+  }
   
   // Push status transition to history
   if (!order.statusHistory) {
     order.statusHistory = [];
+  }
+
+  // Reset viewedBy for new status change
+  const oldStatus = order.status;
+  if (status && status !== oldStatus) {
+    order.viewedBy = [];
   }
   
   if (status === 'APPROVED_FREIGHT') {
@@ -155,6 +258,35 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   
   await order.save();
 
+  // Trigger notifications on status changes
+  if (status === 'PENDING_MD_APPROVAL') {
+    await notifyRole({
+      roleName: 'md',
+      userType: 'MD',
+      title: 'New Order Awaiting Approval',
+      message: `Order ${order.orderNumber} has been submitted for MD approval.`,
+      type: 'NEW_ORDER',
+      orderId: order._id
+    });
+  } else if (status === 'APPROVED') {
+    await createNotification({
+      userId: order.salesExecutiveId,
+      title: 'Order Approved',
+      message: `Your order ${order.orderNumber} has been approved by MD.`,
+      type: 'ORDER_APPROVED',
+      orderId: order._id
+    });
+  } else if (status === 'SENT_TO_ACCOUNTS') {
+    await notifyRole({
+      roleName: 'accounts',
+      userType: 'CITIZEN',
+      title: 'Order Sent to Accounts',
+      message: `Order ${order.orderNumber} has been delivered and sent to Accounts for payment processing.`,
+      type: 'SENT_TO_ACCOUNTS',
+      orderId: order._id
+    });
+  }
+
   res.status(200).json({
     success: true,
     data: order
@@ -172,6 +304,18 @@ const updateOrderLogistics = asyncHandler(async (req, res) => {
   if (!order) {
     res.status(404);
     throw new Error('Order not found');
+  }
+
+  // Access validation
+  if (req.user && !hasOrderAccess(order, req.user)) {
+    res.status(403);
+    throw new Error('Insufficient permissions: You are not authorized to update logistics for this order.');
+  }
+
+  // Reset viewedBy for new status change
+  const oldStatus = order.status;
+  if (status && status !== oldStatus) {
+    order.viewedBy = [];
   }
   
   order.logistics = { ...order.logistics, ...logistics };
@@ -196,12 +340,43 @@ const updateOrder = asyncHandler(async (req, res) => {
     throw new Error('Order not found');
   }
 
+  // Access validation
+  if (req.user) {
+    const role = (req.user.role || '').toLowerCase().replace(/[\s_-]/g, '');
+    const userType = req.user.userType;
+    
+    const isSuperAdmin = userType === 'SUPER_ADMIN' || role === 'superadmin' || role === 'admin';
+    const isMD = userType === 'MD' || role === 'md' || role === 'cmd' || role === 'managingdirector';
+    const isSales = userType === 'SALES_EXECUTIVE' || role === 'salesexecutive' || role === 'sales' || role === 'orgadmin';
+    
+    let isAuthorized = isSuperAdmin || isMD;
+    if (isSales && order.salesExecutiveId.toString() === (req.user.userId || req.user.id).toString()) {
+      isAuthorized = true;
+    }
+    
+    if (!isAuthorized) {
+      res.status(403);
+      throw new Error('Insufficient permissions: You are not authorized to edit this order.');
+    }
+
+    // Sales Executive edit lock
+    if (isSales) {
+      const lockedStatuses = ['APPROVED', 'LOGISTICS_PENDING', 'FREIGHT_APPROVAL_PENDING', 'DISPATCH_READY', 'PACKED', 'SHIPPED', 'DELIVERED', 'SENT_TO_ACCOUNTS', 'INVOICE_GENERATED', 'PAYMENT_PENDING', 'PARTIAL_PAYMENT', 'PAID', 'COMPLETED'];
+      if (lockedStatuses.includes(order.status) || order.assignedLogisticsId) {
+        res.status(403);
+        throw new Error('Locked: Sales Executives cannot edit orders after approval or logistics assignment.');
+      }
+    }
+  }
+
+  const oldAssignedLogisticsId = order.assignedLogisticsId;
+
   // Update order fields
   const allowedUpdates = [
     'customerId', 'executionFirmId', 'salesExecutiveId', 'orderDate', 
     'expectedPaymentDate', 'products', 'deliveryAddress', 'dispatchLocation', 
     'plantName', 'requiredDeliveryDate', 'estimatedFreight', 'advanceAmount',
-    'status', 'remarks'
+    'status', 'remarks', 'assignedLogisticsId'
   ];
 
   allowedUpdates.forEach(field => {
@@ -210,13 +385,30 @@ const updateOrder = asyncHandler(async (req, res) => {
     }
   });
 
+  // Clear viewedBy if a new logistics person is assigned to trigger unread indicator for them
+  if (req.body.assignedLogisticsId !== undefined) {
+    order.viewedBy = [];
+  }
+
   await order.save();
 
   // Populate references before sending back
   order = await Order.findById(order._id)
     .populate('customerId')
     .populate('executionFirmId')
-    .populate('salesExecutiveId', 'firstName lastName email');
+    .populate('salesExecutiveId', 'firstName lastName email')
+    .populate('assignedLogisticsId', 'firstName lastName email');
+
+  // Trigger logistics assignment notification
+  if (req.body.assignedLogisticsId && (!oldAssignedLogisticsId || oldAssignedLogisticsId.toString() !== req.body.assignedLogisticsId.toString())) {
+    await createNotification({
+      userId: order.assignedLogisticsId,
+      title: 'New Order Assigned for Logistics',
+      message: `You have been assigned to order ${order.orderNumber} for trip planning.`,
+      type: 'LOGISTICS_ASSIGNED',
+      orderId: order._id
+    });
+  }
 
   res.status(200).json({
     success: true,

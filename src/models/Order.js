@@ -39,6 +39,8 @@ const orderSchema = new mongoose.Schema({
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
   executionFirmId: { type: mongoose.Schema.Types.ObjectId, ref: 'Firm' },
   salesExecutiveId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  assignedLogisticsId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  viewedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', default: [] }],
   
   // Products
   products: [orderProductSchema],
@@ -91,6 +93,7 @@ const orderSchema = new mongoose.Schema({
       'PACKED', 
       'SHIPPED', 
       'DELIVERED', 
+      'SENT_TO_ACCOUNTS', 
       'INVOICE_GENERATED', 
       'PAYMENT_PENDING', 
       'PARTIAL_PAYMENT', 
