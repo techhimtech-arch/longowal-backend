@@ -136,6 +136,14 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     order.status = status;
     if (remarks) order.remarks = remarks;
     
+    if (status === 'REJECTED' && req.body.materialAdjustment) {
+      order.materialAdjustment = {
+        ...req.body.materialAdjustment,
+        adjustedAt: new Date(),
+        adjustedBy: req.user._id || req.user.userId || req.user.id
+      };
+    }
+    
     order.statusHistory.push({
       status,
       updatedBy: req.user._id || req.user.userId || req.user.id,

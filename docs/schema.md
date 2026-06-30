@@ -87,6 +87,12 @@ Stores profile and access credentials.
   - `updatedByName` (String)
   - `remarks` (String)
   - `updatedAt` (Date)
+- `materialAdjustment` (Object):
+  - `adjustedToOrderId` (ObjectId, Ref: `'Order'`)
+  - `adjustmentType` (String): `DIVERTED_TO_OTHER_ORDER`, `RETURNED_TO_STOCK`, `OTHER`
+  - `adjustmentRemarks` (String)
+  - `adjustedAt` (Date)
+  - `adjustedBy` (ObjectId, Ref: `'User'`)
 
 ### 3.2. Dispatch Collection (`dispatches`)
 Tracks individual vehicle trips.
@@ -102,6 +108,10 @@ Tracks individual vehicle trips.
 - `freightCost` (Number, Default: `0`): Actual trip cost.
 - `loadingCharges` (Number, Default: `0`)
 - `isFreightApproved` (Boolean, Default: `false`)
+- `transporterPaymentStatus` (String): `PENDING`, `PAID`
+- `transporterPaymentProofUrl` (String)
+- `transporterPaymentDate` (Date)
+- `transporterPaymentRemarks` (String)
 - `products` (Array of Subschema):
   - `productName` (String)
   - `quantity` (Number): Tonnage loaded in this vehicle.
