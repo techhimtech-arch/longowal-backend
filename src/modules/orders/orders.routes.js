@@ -60,7 +60,7 @@ router
 router
   .route('/:id')
   .get(getOrder)
-  .put(authorizeRoles('SUPER_ADMIN', 'superadmin', 'ADMIN', 'admin'), updateOrder);
+  .put(authorizeRoles('SUPER_ADMIN', 'superadmin', 'ADMIN', 'admin', 'MD', 'md', 'CMD', 'cmd', 'Managing Director'), updateOrder);
 
 /**
  * @swagger

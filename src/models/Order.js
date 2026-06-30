@@ -6,7 +6,12 @@ const orderProductSchema = new mongoose.Schema({
   quantity: { type: Number, required: true, min: 0 },
   unit: { type: String, required: true, trim: true }, // e.g., kg, tons
   rate: { type: Number, required: true, min: 0 },
-  total: { type: Number, required: true, min: 0 }
+  total: { type: Number, required: true, min: 0 },
+  supplyRate: { type: Number, default: 0 },
+  freight: { type: Number, default: 0 },
+  margin: { type: Number, default: 0 },
+  gstPercent: { type: Number, default: 0 },
+  gstAmount: { type: Number, default: 0 }
 }, { _id: true });
 
 const orderStatusHistorySchema = new mongoose.Schema({
@@ -110,6 +115,19 @@ orderSchema.index({ status: 1 });
 // Pre-save to auto-calculate values
 orderSchema.pre('save', function(next) {
   if (this.products && this.products.length > 0) {
+    this.products.forEach(p => {
+      if (p.supplyRate !== undefined || p.freight !== undefined || p.margin !== undefined || p.gstPercent !== undefined) {
+        const supplyRate = p.supplyRate || 0;
+        const freight = p.freight || 0;
+        const margin = p.margin || 0;
+        const gstPercent = p.gstPercent || 0;
+        
+        const baseRate = supplyRate + freight + margin;
+        p.gstAmount = Number((baseRate * (gstPercent / 100)).toFixed(2));
+        p.rate = Number((baseRate + p.gstAmount).toFixed(2));
+      }
+      p.total = Number((p.quantity * p.rate).toFixed(2));
+    });
     this.totalOrderValue = this.products.reduce((acc, p) => acc + (p.total || 0), 0);
   }
   this.balanceAmount = this.totalOrderValue - (this.advanceAmount || 0);
