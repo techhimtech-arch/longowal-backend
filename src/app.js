@@ -49,7 +49,7 @@ try {
   // Rate limiting
   const limiter = rateLimit({
     windowMs: config.security.rateLimitWindowMs,
-    max: config.security.rateLimitMax,
+    max: config.env === 'development' ? 10000 : config.security.rateLimitMax,
     message: {
       success: false,
       message: 'Too many requests from this IP, please try again later.'
