@@ -1,5 +1,5 @@
 const MasterData = require('../../models/MasterData');
-const asyncHandler = require('../../middleware/async.middleware');
+const asyncHandler = require('express-async-handler');
 
 // @desc    Create new master entry
 // @route   POST /api/v1/masters
