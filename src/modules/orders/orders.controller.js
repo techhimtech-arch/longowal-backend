@@ -14,12 +14,14 @@ const hasOrderAccess = (order, user) => {
   
   const isSales = userType === 'SALES_EXECUTIVE' || role === 'salesexecutive' || role === 'sales' || role === 'orgadmin';
   if (isSales && order.salesExecutiveId) {
-    return order.salesExecutiveId.toString() === (user.userId || user.id || user._id).toString();
+    const salesExecId = order.salesExecutiveId._id ? order.salesExecutiveId._id : order.salesExecutiveId;
+    return salesExecId.toString() === (user.userId || user.id || user._id).toString();
   }
   
   const isLogistics = userType === 'LOGISTICS_TEAM' || role === 'logistics' || role === 'logisticsteam';
   if (isLogistics && order.assignedLogisticsId) {
-    return order.assignedLogisticsId.toString() === (user.userId || user.id || user._id).toString();
+    const logisticsId = order.assignedLogisticsId._id ? order.assignedLogisticsId._id : order.assignedLogisticsId;
+    return logisticsId.toString() === (user.userId || user.id || user._id).toString();
   }
   
   const isAccounts = userType === 'CITIZEN' || role === 'accounts' || role === 'accountant';
@@ -50,6 +52,12 @@ const createOrder = asyncHandler(async (req, res) => {
   }
 
   const orderData = req.body;
+
+  // Validate that a logistics person is assigned if status is not DRAFT
+  if (orderData.status && orderData.status !== 'DRAFT' && !orderData.assignedLogisticsId) {
+    res.status(400);
+    throw new Error('Please select an Assigned Logistics Person before confirming the order.');
+  }
   
   // Assign a unique order number
   if (!orderData.orderNumber) {
@@ -158,6 +166,13 @@ const getOrder = asyncHandler(async (req, res) => {
 
   // Access validation
   if (req.user && !hasOrderAccess(order, req.user)) {
+    const role = (req.user.role || '').toLowerCase().replace(/[\s_-]/g, '');
+    const userType = req.user.userType;
+    const isLogistics = userType === 'LOGISTICS_TEAM' || role === 'logistics' || role === 'logisticsteam';
+    if (isLogistics) {
+      res.status(404);
+      throw new Error('Order not found');
+    }
     res.status(403);
     throw new Error('Insufficient permissions: You are not authorized to view this order.');
   }
@@ -192,8 +207,22 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 
   // Access validation
   if (req.user && !hasOrderAccess(order, req.user)) {
+    const role = (req.user.role || '').toLowerCase().replace(/[\s_-]/g, '');
+    const userType = req.user.userType;
+    const isLogistics = userType === 'LOGISTICS_TEAM' || role === 'logistics' || role === 'logisticsteam';
+    if (isLogistics) {
+      res.status(404);
+      throw new Error('Order not found');
+    }
     res.status(403);
     throw new Error('Insufficient permissions: You are not authorized to update status for this order.');
+  }
+
+  // Enforce logistics assignment validation
+  const newStatus = status === 'APPROVED_FREIGHT' || status === 'REJECTED_FREIGHT' ? 'LOGISTICS_PENDING' : status;
+  if (newStatus && newStatus !== 'DRAFT' && newStatus !== 'REJECTED' && newStatus !== 'CANCELLED' && !order.assignedLogisticsId) {
+    res.status(400);
+    throw new Error('Please select an Assigned Logistics Person before confirming the order.');
   }
   
   // Push status transition to history
@@ -308,6 +337,13 @@ const updateOrderLogistics = asyncHandler(async (req, res) => {
 
   // Access validation
   if (req.user && !hasOrderAccess(order, req.user)) {
+    const role = (req.user.role || '').toLowerCase().replace(/[\s_-]/g, '');
+    const userType = req.user.userType;
+    const isLogistics = userType === 'LOGISTICS_TEAM' || role === 'logistics' || role === 'logisticsteam';
+    if (isLogistics) {
+      res.status(404);
+      throw new Error('Order not found');
+    }
     res.status(403);
     throw new Error('Insufficient permissions: You are not authorized to update logistics for this order.');
   }
@@ -355,6 +391,11 @@ const updateOrder = asyncHandler(async (req, res) => {
     }
     
     if (!isAuthorized) {
+      const isLogistics = userType === 'LOGISTICS_TEAM' || role === 'logistics' || role === 'logisticsteam';
+      if (isLogistics) {
+        res.status(404);
+        throw new Error('Order not found');
+      }
       res.status(403);
       throw new Error('Insufficient permissions: You are not authorized to edit this order.');
     }
@@ -388,6 +429,12 @@ const updateOrder = asyncHandler(async (req, res) => {
   // Clear viewedBy if a new logistics person is assigned to trigger unread indicator for them
   if (req.body.assignedLogisticsId !== undefined) {
     order.viewedBy = [];
+  }
+
+  // Enforce logistics assignment validation if status is not DRAFT
+  if (order.status !== 'DRAFT' && !order.assignedLogisticsId) {
+    res.status(400);
+    throw new Error('Please select an Assigned Logistics Person before confirming the order.');
   }
 
   await order.save();

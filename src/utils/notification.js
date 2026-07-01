@@ -10,17 +10,20 @@ const createNotification = async ({ userId, title, message, type, orderId }) => 
   try {
     if (!userId) return null;
     
+    const finalUserId = userId._id || userId;
+    const finalOrderId = orderId ? (orderId._id || orderId) : undefined;
+    
     const notification = await Notification.create({
-      userId,
+      userId: finalUserId,
       title,
       message,
       type,
-      orderId
+      orderId: finalOrderId
     });
     
     logger.info('Notification created', {
       notificationId: notification._id,
-      userId,
+      userId: finalUserId,
       type
     });
     
