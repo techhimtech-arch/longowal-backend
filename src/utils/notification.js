@@ -47,9 +47,9 @@ const notifyRole = async ({ roleName, userType, title, message, type, orderId })
       conditions.push({ userType });
     }
     if (roleName) {
-      // Find Role ID by name
+      // Find Role ID by name matching regex
       const roleDocs = await Role.find({
-        name: { $regex: new RegExp(`^${roleName}$`, 'i') },
+        name: { $regex: new RegExp(roleName, 'i') },
         isActive: true
       });
       if (roleDocs.length > 0) {

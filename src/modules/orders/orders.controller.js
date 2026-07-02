@@ -20,6 +20,9 @@ const hasOrderAccess = (order, user) => {
   
   const isLogistics = userType === 'LOGISTICS_TEAM' || role === 'logistics' || role === 'logisticsteam';
   if (isLogistics && order.assignedLogisticsId) {
+    const logisticsStatuses = ['LOGISTICS_PENDING', 'FREIGHT_APPROVAL_PENDING', 'DISPATCH_READY', 'PACKED', 'SHIPPED', 'DELIVERED', 'SENT_TO_ACCOUNTS', 'INVOICE_GENERATED', 'PAYMENT_PENDING', 'PARTIAL_PAYMENT', 'PAID', 'COMPLETED'];
+    if (!logisticsStatuses.includes(order.status)) return false;
+    
     const logisticsId = order.assignedLogisticsId._id ? order.assignedLogisticsId._id : order.assignedLogisticsId;
     return logisticsId.toString() === (user.userId || user.id || user._id).toString();
   }
@@ -58,6 +61,42 @@ const createOrder = asyncHandler(async (req, res) => {
     res.status(400);
     throw new Error('Please select an Assigned Logistics Person before confirming the order.');
   }
+  
+  // Enforce Mandatory Field Validation
+  if (orderData.status !== 'DRAFT') {
+    const missingFields = [];
+    
+    // Section 1
+    if (!orderData.customerId) missingFields.push('customerId');
+    if (!orderData.executionFirmId) missingFields.push('executionFirmId');
+    if (!orderData.salesExecutiveId && !req.user.userId && !req.user._id && !req.user.id) missingFields.push('salesExecutiveId');
+    
+    // Section 2
+    if (!orderData.products || orderData.products.length === 0) {
+      missingFields.push('products');
+    } else {
+      for (const p of orderData.products) {
+        if (!p.productName || !p.quantity || !p.unit || p.supplyRate === undefined || p.supplyRate === null || p.freight === undefined || p.freight === null || p.margin === undefined || p.margin === null || p.gstPercent === undefined || p.gstPercent === null || p.rate === undefined || p.rate === null) {
+          missingFields.push('products (incomplete rows)');
+          break;
+        }
+      }
+    }
+    
+    // Section 3
+    if (!orderData.deliveryAddress) missingFields.push('deliveryAddress');
+    if (!orderData.dispatchLocation) missingFields.push('dispatchLocation');
+    if (orderData.estimatedFreight === undefined || orderData.estimatedFreight === null || String(orderData.estimatedFreight) === "") missingFields.push('estimatedFreight');
+    
+    // Section 4
+    if (!orderData.expectedPaymentDate) missingFields.push('expectedPaymentDate');
+    
+    if (missingFields.length > 0) {
+      res.status(400);
+      throw new Error(`Validation failed. Missing mandatory fields: ${missingFields.join(', ')}`);
+    }
+  }
+
   
   // Assign a unique order number
   if (!orderData.orderNumber) {
@@ -123,7 +162,7 @@ const getOrders = asyncHandler(async (req, res) => {
     } else if (isLogistics) {
       // Logistics team should only see orders that are approved or beyond and are explicitly assigned to them!
       query.assignedLogisticsId = req.user.userId || req.user.id || req.user._id;
-      query.status = { $in: ['APPROVED', 'LOGISTICS_PENDING', 'FREIGHT_APPROVAL_PENDING', 'DISPATCH_READY', 'PACKED', 'SHIPPED', 'DELIVERED', 'SENT_TO_ACCOUNTS', 'INVOICE_GENERATED', 'PAYMENT_PENDING', 'PARTIAL_PAYMENT', 'PAID', 'COMPLETED'] };
+      query.status = { $in: ['LOGISTICS_PENDING', 'FREIGHT_APPROVAL_PENDING', 'DISPATCH_READY', 'PACKED', 'SHIPPED', 'DELIVERED', 'SENT_TO_ACCOUNTS', 'INVOICE_GENERATED', 'PAYMENT_PENDING', 'PARTIAL_PAYMENT', 'PAID', 'COMPLETED'] };
     } else if (isAccounts) {
       // Accounts team should only see orders that have been sent to accounts
       query.status = { $in: ['SENT_TO_ACCOUNTS', 'INVOICE_GENERATED', 'PAYMENT_PENDING', 'PARTIAL_PAYMENT', 'PAID', 'COMPLETED'] };
@@ -305,6 +344,22 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
       type: 'ORDER_APPROVED',
       orderId: order._id
     });
+  } else if (status === 'APPROVED_FREIGHT' && order.assignedLogisticsId) {
+    await createNotification({
+      userId: order.assignedLogisticsId,
+      title: 'Freight Approved',
+      message: `Freight approved for Order ${order.orderNumber}. You can now proceed with dispatch.`,
+      type: 'FREIGHT_APPROVED',
+      orderId: order._id
+    });
+  } else if (status === 'REJECTED_FREIGHT' && order.assignedLogisticsId) {
+    await createNotification({
+      userId: order.assignedLogisticsId,
+      title: 'Freight Rejected',
+      message: `Freight rejected for Order ${order.orderNumber}. Please update the trip plan.`,
+      type: 'FREIGHT_REJECTED',
+      orderId: order._id
+    });
   } else if (status === 'SENT_TO_ACCOUNTS') {
     await notifyRole({
       roleName: 'accounts',
@@ -336,16 +391,26 @@ const updateOrderLogistics = asyncHandler(async (req, res) => {
   }
 
   // Access validation
-  if (req.user && !hasOrderAccess(order, req.user)) {
+  if (req.user) {
+    if (!hasOrderAccess(order, req.user)) {
+      const role = (req.user.role || '').toLowerCase().replace(/[\s_-]/g, '');
+      const userType = req.user.userType;
+      const isLogistics = userType === 'LOGISTICS_TEAM' || role === 'logistics' || role === 'logisticsteam';
+      if (isLogistics) {
+        res.status(404);
+        throw new Error('Order not found');
+      }
+      res.status(403);
+      throw new Error('Insufficient permissions: You are not authorized to update logistics for this order.');
+    }
+    
     const role = (req.user.role || '').toLowerCase().replace(/[\s_-]/g, '');
     const userType = req.user.userType;
-    const isLogistics = userType === 'LOGISTICS_TEAM' || role === 'logistics' || role === 'logisticsteam';
-    if (isLogistics) {
-      res.status(404);
-      throw new Error('Order not found');
+    const isSales = userType === 'SALES_EXECUTIVE' || role === 'salesexecutive' || role === 'sales' || role === 'orgadmin';
+    if (isSales) {
+      res.status(403);
+      throw new Error('Insufficient permissions: Sales Executives are not allowed to update logistics details.');
     }
-    res.status(403);
-    throw new Error('Insufficient permissions: You are not authorized to update logistics for this order.');
   }
 
   // Reset viewedBy for new status change
@@ -358,6 +423,17 @@ const updateOrderLogistics = asyncHandler(async (req, res) => {
   if (status) order.status = status; // Typically updates to FREIGHT_APPROVAL_PENDING or DISPATCH_READY
   
   await order.save();
+
+  if (status === 'FREIGHT_APPROVAL_PENDING') {
+    await notifyRole({
+      roleName: 'md',
+      userType: 'MD',
+      title: 'Freight Approval Required',
+      message: `Freight Approval Required for Order ${order.orderNumber}.`,
+      type: 'FREIGHT_APPROVAL_REQUIRED',
+      orderId: order._id
+    });
+  }
 
   res.status(200).json({
     success: true,
@@ -448,11 +524,26 @@ const updateOrder = asyncHandler(async (req, res) => {
 
   // Trigger logistics assignment notification
   if (req.body.assignedLogisticsId && (!oldAssignedLogisticsId || oldAssignedLogisticsId.toString() !== req.body.assignedLogisticsId.toString())) {
-    await createNotification({
-      userId: order.assignedLogisticsId,
-      title: 'New Order Assigned for Logistics',
-      message: `You have been assigned to order ${order.orderNumber} for trip planning.`,
-      type: 'LOGISTICS_ASSIGNED',
+    const logisticsStatuses = ['LOGISTICS_PENDING', 'FREIGHT_APPROVAL_PENDING', 'DISPATCH_READY', 'PACKED', 'SHIPPED', 'DELIVERED'];
+    if (logisticsStatuses.includes(order.status)) {
+      await createNotification({
+        userId: order.assignedLogisticsId,
+        title: 'New Order Assigned for Logistics',
+        message: `You have been assigned to order ${order.orderNumber} for trip planning.`,
+        type: 'LOGISTICS_ASSIGNED',
+        orderId: order._id
+      });
+    }
+  }
+
+  // Trigger MD notification if status updated to PENDING_MD_APPROVAL
+  if (req.body.status === 'PENDING_MD_APPROVAL' && order.status === 'PENDING_MD_APPROVAL') {
+    await notifyRole({
+      roleName: 'md',
+      userType: 'MD',
+      title: 'New Order Awaiting Approval',
+      message: `Order ${order.orderNumber} has been submitted for MD approval.`,
+      type: 'NEW_ORDER',
       orderId: order._id
     });
   }
