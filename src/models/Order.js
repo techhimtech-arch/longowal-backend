@@ -124,7 +124,7 @@ orderSchema.index({ salesExecutiveId: 1 });
 orderSchema.index({ status: 1 });
 
 // Pre-save to auto-calculate values
-orderSchema.pre('save', function(next) {
+orderSchema.pre('save', async function(next) {
   if (this.products && this.products.length > 0) {
     this.products.forEach(p => {
       if (p.supplyRate !== undefined || p.freight !== undefined || p.margin !== undefined || p.gstPercent !== undefined) {
@@ -143,6 +143,27 @@ orderSchema.pre('save', function(next) {
     this.totalOrderValue = this.products.reduce((acc, p) => acc + (p.total || 0), 0);
   }
   this.balanceAmount = this.totalOrderValue - (this.advanceAmount || 0);
+
+  // If status is transitioning to DELIVERED, automatically calculate expectedPaymentDate based on customer's paymentTerms
+  if (this.isModified('status') && this.status === 'DELIVERED') {
+    try {
+      const Customer = mongoose.model('Customer');
+      const customer = await Customer.findById(this.customerId);
+      let bufferDays = 15; // default 15 days
+      if (customer && customer.paymentTerms) {
+        const match = customer.paymentTerms.match(/\d+/);
+        if (match) {
+          bufferDays = parseInt(match[0]);
+        }
+      }
+      const paymentDeadline = new Date();
+      paymentDeadline.setDate(paymentDeadline.getDate() + bufferDays);
+      this.expectedPaymentDate = paymentDeadline;
+    } catch (err) {
+      console.error('Error auto-setting expectedPaymentDate in Order pre-save hook:', err);
+    }
+  }
+
   next();
 });
 

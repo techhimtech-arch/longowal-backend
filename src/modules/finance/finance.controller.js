@@ -40,6 +40,25 @@ const createInvoice = asyncHandler(async (req, res) => {
   // Set initial outstanding
   invoiceData.outstandingAmount = invoiceData.invoiceAmount;
   
+  // Auto-set dueDate based on expectedPaymentDate or customer paymentTerms
+  if (!invoiceData.dueDate) {
+    if (order.expectedPaymentDate) {
+      invoiceData.dueDate = order.expectedPaymentDate;
+    } else {
+      const customer = await Customer.findById(invoiceData.customerId);
+      let bufferDays = 15;
+      if (customer && customer.paymentTerms) {
+        const match = customer.paymentTerms.match(/\d+/);
+        if (match) {
+          bufferDays = parseInt(match[0]);
+        }
+      }
+      const due = new Date(invoiceData.invoiceDate || Date.now());
+      due.setDate(due.getDate() + bufferDays);
+      invoiceData.dueDate = due;
+    }
+  }
+  
   const invoice = await Invoice.create(invoiceData);
   
   // Update order status
