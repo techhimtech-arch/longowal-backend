@@ -217,6 +217,7 @@ const optionalAuth = async (req, res, next) => {
       
       if (user && user.status === 'ACTIVE') {
         const userRoles = await UserRole.find({ userId: user._id }).populate('roleId');      
+        const userPermissions = await getUserPermissions(user._id);
         
         req.user = {
           userId: user._id,
