@@ -1,5 +1,6 @@
 const asyncHandler = require('express-async-handler');
 const Order = require('../../models/Order');
+const Customer = require('../../models/Customer');
 const { createNotification, notifyRole } = require('../../utils/notification');
 
 // Helper to check if user has access to a specific order
@@ -182,16 +183,53 @@ const getOrders = asyncHandler(async (req, res) => {
   if (req.query.customerId) query.customerId = req.query.customerId;
   if (req.query.executionFirmId) query.executionFirmId = req.query.executionFirmId;
 
+  // Search logic: matches orderNumber, or customer name
+  if (req.query.search) {
+    const searchRegex = new RegExp(req.query.search, 'i');
+    
+    // Find matching customer IDs
+    const matchingCustomers = await Customer.find({ companyName: searchRegex }).select('_id');
+    const customerIds = matchingCustomers.map(c => c._id);
+    
+    const searchCondition = {
+      $or: [
+        { orderNumber: searchRegex },
+        { customerId: { $in: customerIds } }
+      ]
+    };
+    
+    // Merge search condition with existing query filters using $and to preserve role isolation
+    if (Object.keys(query).length > 0) {
+      query = { $and: [query, searchCondition] };
+    } else {
+      query = searchCondition;
+    }
+  }
+
+  // Pagination parameters
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const skip = (page - 1) * limit;
+
+  const total = await Order.countDocuments(query);
   const orders = await Order.find(query)
     .populate('customerId', 'companyName customerCode')
     .populate('executionFirmId', 'firmName')
     .populate('salesExecutiveId', 'firstName lastName')
     .populate('assignedLogisticsId', 'firstName lastName')
-    .sort('-createdAt');
+    .sort('-createdAt')
+    .skip(skip)
+    .limit(limit);
     
   res.status(200).json({
     success: true,
     count: orders.length,
+    pagination: {
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit)
+    },
     data: orders
   });
 });

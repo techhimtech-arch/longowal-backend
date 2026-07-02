@@ -22,11 +22,39 @@ const createCustomer = asyncHandler(async (req, res) => {
 // @route   GET /api/v1/customers
 // @access  Private
 const getCustomers = asyncHandler(async (req, res) => {
-  const customers = await Customer.find().sort('-createdAt');
+  let query = {};
+  
+  if (req.query.status) query.status = req.query.status;
+  if (req.query.customerCategory) query.customerCategory = req.query.customerCategory;
+  
+  if (req.query.search) {
+    const searchRegex = new RegExp(req.query.search, 'i');
+    query.$or = [
+      { companyName: searchRegex },
+      { customerCode: searchRegex },
+      { 'primaryContact.name': searchRegex }
+    ];
+  }
+
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const skip = (page - 1) * limit;
+
+  const total = await Customer.countDocuments(query);
+  const customers = await Customer.find(query)
+    .sort('-createdAt')
+    .skip(skip)
+    .limit(limit);
   
   res.status(200).json({
     success: true,
     count: customers.length,
+    pagination: {
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit)
+    },
     data: customers
   });
 });
