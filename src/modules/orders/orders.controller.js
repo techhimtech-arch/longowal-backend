@@ -151,13 +151,15 @@ const getOrders = asyncHandler(async (req, res) => {
     const role = (req.user.role || '').toLowerCase().replace(/[\s_-]/g, '');
     const userType = req.user.userType;
     
-    const isSales = userType === 'SALES_EXECUTIVE' || role === 'salesexecutive' || role === 'sales' || role === 'orgadmin';
+    const isSales = userType === 'SALES_EXECUTIVE' || role === 'salesexecutive' || role === 'sales' || role === 'orgadmin' || role === 'salesperson' || role === 'salesman';
     const isLogistics = userType === 'LOGISTICS_TEAM' || role === 'logistics' || role === 'logisticsteam';
     const isAccounts = userType === 'CITIZEN' || role === 'accounts' || role === 'accountant';
     const isMD = userType === 'MD' || role === 'md' || role === 'cmd' || role === 'managingdirector';
     const isSuperAdmin = userType === 'SUPER_ADMIN' || role === 'superadmin' || role === 'admin';
     
-    if (isSales) {
+    if (isSuperAdmin || isMD) {
+      // no filter, can see all orders
+    } else if (isSales) {
       query.salesExecutiveId = req.user.userId || req.user.id || req.user._id;
     } else if (isLogistics) {
       // Logistics team should only see orders that are approved or beyond and are explicitly assigned to them!
@@ -166,6 +168,12 @@ const getOrders = asyncHandler(async (req, res) => {
     } else if (isAccounts) {
       // Accounts team should only see orders that have been sent to accounts
       query.status = { $in: ['SENT_TO_ACCOUNTS', 'INVOICE_GENERATED', 'PAYMENT_PENDING', 'PARTIAL_PAYMENT', 'PAID', 'COMPLETED'] };
+    } else {
+      // Fallback: unauthorized or unmapped roles should only see orders they created or are explicitly tied to.
+      // If we don't know who they are, they shouldn't see ALL orders.
+      query.$or = [
+        { 'statusHistory.updatedBy': req.user.userId || req.user.id || req.user._id }
+      ];
     }
   }
   
